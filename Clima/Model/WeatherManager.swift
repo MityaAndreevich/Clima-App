@@ -8,8 +8,14 @@
 
 import Foundation
 
+protocol WeatherManagerDelegate {
+    func didUpdateWeather(weather: WeatherModel)
+}
+
+//@available(iOS 15.0, *)
 struct WeatherManager {
     let weatherURL = "https://api.openweathermap.org/data/2.5/weather?appid=85cfd3bee8b44759212f3f6c9b8e4060&units=metric"
+    var delegate: WeatherManagerDelegate?
     
     func fetchWeather(cityName: String) {
         let urlString = "\(weatherURL)&q=\(cityName)"
@@ -17,21 +23,24 @@ struct WeatherManager {
     }
     
     func performRequest(urlString: String) {
-        guard let url = URL(string: urlString) else { return }
-        let session = URLSession(configuration: .default)
-        let task = session.dataTask(with: url) { data, response, error in
-            if error != nil {
-                print(error!)
-                return
+        if let url = URL(string: urlString) {
+            let session = URLSession(configuration: .default)
+            let task = session.dataTask(with: url) { data, response, error in
+                if error != nil {
+                    print(error!)
+                    return
+                }
+                if let safeData = data {
+                    if let weather = self.parseJSON(weatherData: safeData) {
+                        self.delegate?.didUpdateWeather(weather: weather)
+                    }
+                }
             }
-            if let safeData = data {
-                self.parseJSON(weatherData: safeData)
-            }
+            task.resume()
         }
-        task.resume()
     }
-    
-    func parseJSON(weatherData: Data) {
+        
+    func parseJSON(weatherData: Data) -> WeatherModel? {
         let decoder = JSONDecoder()
         do {
             let decodedData = try decoder.decode(WeatherData.self, from: weatherData)
@@ -40,10 +49,10 @@ struct WeatherManager {
             let name = decodedData.name
             
             let weather = WeatherModel(conditionID: id, cityName: name, temperature: temp)
-            
-            print(weather.temperatureString)
+            return weather
         } catch {
             print(error)
+            return nil
         }
     }
     
